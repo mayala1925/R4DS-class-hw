@@ -1,0 +1,187 @@
+---
+title: "Homework_3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading Libraries
+
+```{r}
+library(tidyverse)
+library(scales)
+```
+
+
+Importing dataset
+```{r}
+recent_grads <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018/2018-10-16/recent-grads.csv")
+
+recent_grads
+```
+## Transforming Data
+```{r}
+recent_grads <- recent_grads %>%
+  mutate(Major = str_to_title(Major))
+
+recent_grads
+```
+## Creating Boxplot
+```{r}
+recent_grads_plot <- recent_grads %>% 
+  ggplot(aes(x = Major_category, y = Median)) + 
+           geom_boxplot()
+
+recent_grads_plot
+```
+
+
+## Transposing data so axis are flipped
+```{r}
+flipped_plot <- recent_grads_plot + coord_flip()
+
+flipped_plot
+```
+
+
+## Adding colors!
+```{r}
+grads_flipped_colors <- recent_grads %>% 
+  ggplot(aes(x = Major_category, y = Median, fill = Major_category)) + 
+           geom_boxplot() + coord_flip()
+  
+
+grads_flipped_colors
+```
+
+
+
+## Removing Legend
+```{r}
+grads_flipped_colors <- recent_grads %>% 
+  ggplot(aes(x = Major_category, y = Median, fill = Major_category)) + 
+           geom_boxplot() + coord_flip() + theme(legend.position="none")
+
+grads_flipped_colors
+```
+
+
+
+## Changing x-axis numbers to have dollar signs
+```{r}
+grads_flipped_colors <- recent_grads %>% 
+  ggplot(aes(x = Major_category, y = Median, fill = Major_category)) + 
+           geom_boxplot() + coord_flip() + theme(legend.position="none") + scale_y_continuous(labels=scales::dollar_format())
+
+grads_flipped_colors
+```
+
+
+
+## Changing x-axis scale to start from 0
+
+```{r}
+grads_flipped_colors <- grads_flipped_colors + expand_limits(y = 0) # Have to set to y axis because the axis are flipped
+
+grads_flipped_colors
+```
+
+
+## Sort by median ascending
+
+```{r}
+
+grads_flipped_colors <- recent_grads %>% 
+  ggplot(aes(x = fct_reorder(Major_category,Median), y = Median, fill = fct_reorder(Major_category, Median))) +
+           geom_boxplot() + coord_flip() + theme(legend.position="none") + scale_y_continuous(labels=scales::dollar_format()) + expand_limits(y = 0)
+
+grads_flipped_colors
+```
+
+
+## Changing labels so they are correct
+```{r}
+grads_flipped_colors <- grads_flipped_colors + labs(y = 'Income (Median)', x = 'Major Category', title = 'Median Income Based on Major Category')
+
+grads_flipped_colors
+```
+
+
+Success!!
+
+# On to question 2 - Bob Ross
+
+Loading library
+
+```{r}
+library(janitor)
+```
+
+
+## Importing Data
+
+
+```{r}
+bob_ross <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-08-06/bob-ross.csv")
+
+bob_ross
+```
+
+
+## Clean up column names with Janitor
+
+
+```{r}
+bob_ross <- bob_ross %>% 
+  janitor::clean_names()
+  
+bob_ross
+```
+
+## Changing from wide to long format
+
+```{r}
+bob_long <- bob_ross %>% 
+  pivot_longer(cols = !c('episode','title'),
+               names_to = 'element',
+               values_to = 'present')
+
+view(bob_long)
+```
+
+## Keep only values of n = 1
+
+```{r}
+bob_long <- bob_long %>% 
+  filter(present == 1)
+  
+bob_long
+```
+
+## Counting and sorting present column
+
+```{r}
+bob_long_sorted <- bob_long %>% 
+  count(element, sort = TRUE)
+
+bob_long_sorted
+```
+
+## Only use the top 20 entries to create bar plot and labeling
+
+```{r}
+bob_long_sorted$element <- factor(bob_long_sorted$element, levels = bob_long_sorted$element)
+
+bob_long_sorted %>% 
+  head(20) %>% 
+  ggplot(aes(x = reorder(element,n), y = n)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() + 
+  labs(x = 'Present in Episode', y = 'In Drawing', title = 'Bob Ross Likes to Draw Trees!!')
+  
+```
+
+
+
