@@ -1,0 +1,209 @@
+---
+title: "hw4/2"
+author: "Matthew Ayala"
+date: "11/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Loading Libraries 
+
+```{r}
+library(caret)
+library(skimr)
+library(palmerpenguins)
+```
+
+# Looking at data
+
+```{r}
+penguins
+```
+
+# Looking at amount of each species
+```{r}
+library(tidyverse)
+penguins %>% 
+  count(species)
+```
+# Computing mean
+```{r}
+penguins %>% 
+  group_by(species) %>% 
+  summarize(across(where(is.numeric), mean, na.rm = TRUE))
+```
+
+# Creating validation set
+
+```{r}
+validation_index <- createDataPartition(penguins$species, p=0.80, list=FALSE)
+# select 20% of the data for validation
+validation <- penguins[-validation_index,]
+# use the remaining 80% of data to training and testing the models
+dataset <- penguins[validation_index,]
+
+```
+# Changing columns to double
+```{r}
+dataset <- dataset %>% 
+  mutate(flipper_length_mm = as.numeric(flipper_length_mm)) %>% 
+  mutate(body_mass_g = as.numeric(body_mass_g)) %>% 
+  select(species,bill_length_mm,bill_depth_mm,flipper_length_mm,body_mass_g)
+
+dataset
+```
+
+# Remove NA
+
+```{r}
+dataset <- dataset %>% 
+  na.omit(dataset)
+
+validation <- validation %>% 
+  na.omit(validation)
+
+view(dataset)
+```
+## Dimensions of of data
+
+```{r}
+dim(dataset)
+```
+
+#Types of Attributes
+```{r}
+sapply(dataset, class)
+```
+
+# Class Distribution
+
+```{r}
+percentage <- prop.table(table(dataset$species)) * 100
+cbind(freq=table(dataset$species), percentage=percentage)
+```
+# Summarize Distribution
+
+```{r}
+summary(dataset)
+glimpse(dataset)
+skim(dataset)
+```
+
+# Univariate Plots
+
+```{r}
+x <- dataset[,2:5]
+y <- dataset[,1]
+y
+x
+```
+# Boxplots with the old way
+```{r}
+par(mfrow=c(1,4))
+  for(i in 1:4) {
+  boxplot(x[,i], main=names(dataset)[i])
+  }
+```
+# Boxplots with ggplot2
+```{r}
+things <- c('bill_length_mm','bill_depth_mm','flipper_length_mm','body_mass_g')
+long_data <- dataset %>% 
+  pivot_longer(cols = things,names_to = 'attribute', values_to = 'values')
+ggplot(data = long_data,aes(x=attribute,y=values)) + geom_boxplot() + facet_wrap(.~attribute, scales = "free_y")
+```
+# Barplot for classes
+
+```{r}
+plot(y)
+
+ggplot(data=dataset,aes(x=species)) + geom_bar()
+```
+# Multivariate Plots
+
+```{r}
+y_unl = unlist(y)
+
+featurePlot(x = x,y=as.factor(y_unl), plot = 'ellipse')
+
+```
+# Multivariate boxplot
+
+```{r}
+featurePlot(x = x,y=as.factor(y_unl), plot = 'box')
+```
+# Multivariate density plot
+
+```{r}
+featurePlot(x = x,y=as.factor(y_unl), plot = 'density',scale = "free")
+
+```
+
+# Test Harness
+
+```{r}
+control <- trainControl(method="cv", number=10)
+metric <- "Accuracy"
+```
+
+# Build models
+
+## lda
+```{r}
+set.seed(88)
+fit.lda <- train(species~., data=dataset, method="lda", metric=metric, trControl=control)
+fit.lda
+```
+
+## Cart
+```{r}
+set.seed(88)
+fit.cart <- train(species~., data=dataset, method="rpart", metric=metric, trControl=control)
+fit.cart
+```
+## KNN
+```{r}
+set.seed(88)
+fit.knn <- train(species~., data=dataset, method="knn", metric=metric, trControl=control)
+fit.knn
+```
+## SVM
+
+```{r}
+set.seed(88)
+fit.svm <- train(species~., data=dataset, method="svmRadial", metric=metric, trControl=control)
+fit.svm
+```
+
+## Random Forest
+
+```{r}
+set.seed(88)
+fit.rf <- train(species~., data=dataset, method="rf", metric=metric, trControl=control)
+fit.rf
+```
+
+## Selecting the best model
+
+```{r}
+results <- resamples(list(lda=fit.lda, cart=fit.cart, knn=fit.knn, svm=fit.svm, rf=fit.rf))
+summary(results)
+```
+
+## Comparing accuracy of models
+
+```{r}
+dotplot(results)
+```
+```{r}
+print(fit.lda)
+```
+
+```{r}
+predictions <- predict(fit.lda, validation)
+confusionMatrix(predictions, validation$species)
+```
+
