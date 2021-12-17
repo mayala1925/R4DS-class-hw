@@ -1,0 +1,317 @@
+---
+title: "Homework 5"
+author: "Matthew Ayala"
+date: "12/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Importing required libraries
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(here)
+library(janitor)
+library(apaTables)
+library(sjPlot)
+
+```
+
+# Creating list of filesnames
+
+```{r}
+filenames <-
+  list.files(full.names = TRUE)
+
+filenames
+```
+
+# Reading in all the files skipping the first 4 rows.
+
+```{r}
+all_files <-
+  filenames %>% 
+  map(., ~ read_csv(., skip=4))
+
+all_files
+
+```
+
+# Figuring out if tables have the same column names, must read in 4th file skipping only the first 3 column names
+
+
+```{r}
+
+all_files %>% 
+  # Apply the function names to each element of all_files
+  map(names)
+
+all_files[[4]] <-
+  # Skip the first 3 lines instead of the first 4
+  read_csv(filenames[[4]], skip = 3)
+
+all_files
+```
+
+# Making sure all the headers are correect now.
+
+```{r}
+all_files %>% 
+  map(names) %>% 
+  map(head)
+
+identical(names(all_files[[1]]), names(all_files[[2]]))
+identical(names(all_files[[2]]), names(all_files[[3]]))
+identical(names(all_files[[3]]), names(all_files[[4]]))
+identical(names(all_files[[4]]), names(all_files[[5]]))
+
+```
+# Perfect!
+
+# Now to combine the dataframes.
+
+```{r}
+child_counts <-
+  all_files %>% 
+  bind_rows()
+
+child_counts
+```
+# Cleaning/ fixing the names with janitor
+
+```{r}
+
+child_counts <- 
+  janitor::clean_names(child_counts)
+
+child_counts %>% 
+  names()
+```
+# Showing that we need to clean the state_name column
+
+```{r}
+child_counts %>%
+  count(state_name) %>%
+  head()
+```
+# Cleaning state_name column and making sure they were all changed
+```{r}
+child_counts <-
+  child_counts %>%
+  mutate(state_name = tolower(state_name)) 
+
+child_counts %>%
+  count(state_name) %>%
+  head()
+
+```
+# They were all lowered and now counted as intened!
+
+# Now to change year column data type.
+```{r}
+child_counts <- child_counts %>%
+  mutate(year = ymd(year, truncated = 2))
+  
+
+child_counts
+```
+# Now changing chr columns to numeric
+
+```{r}
+child_counts <- child_counts %>% 
+  mutate_at(vars(contains('age')),funs(as.numeric))
+
+child_counts
+```
+# Succesfully processed the data, now on to plotting!
+
+```{r}
+# Preselecting columns that we need
+
+child_counts_plotting <- child_counts %>% 
+  select(c('year','sea_disability_category','asian_age_3_5'))
+
+child_counts_plotting
+
+```
+# Removing NAs and adjusting data to plot
+```{r}
+child_counts_plotting <- child_counts_plotting %>% 
+  filter(sea_disability_category != 'All Disabilities') %>% 
+  filter(!is.na(asian_age_3_5)) %>% 
+  mutate(sea_disability_category = ifelse(sea_disability_category == 'Developmental delay (valid only for children ages 3-9 when defined by state)', 'Developmental Delay', sea_disability_category))
+
+
+child_counts_plotting
+
+
+```
+# Creating Plot
+
+```{r}
+child_counts_plotting %>% 
+  ggplot(aes(x = year, y = asian_age_3_5, fill = sea_disability_category)) +
+  geom_bar(stat = 'identity') +
+  labs(x ='Year', y = 'Asian Age 3 to 5', title = 'Disability Distribution for Asian')
+
+
+```
+# Now starting with creating the wt4 set.
+
+```{r}
+WT4.set <- child_counts %>% 
+  filter(
+    sea_disability_category == "All Disabilities",
+    sea_education_environment %in% c("Total, Age 3-5", "Total, Age 6-21")
+  ) %>% 
+  select_at(vars(
+    year,
+    state_name,
+    contains("sea"),
+    contains("male")
+  )) %>% 
+  rename(
+    state = "state_name",
+    age = "sea_education_environment",
+    disability = "sea_disability_category",
+    f_3_5 = "female_age_3_to_5",
+    m_3_5 = "male_age_3_to_5",
+    f_6_21 = "female_age_6_to_21",
+    m_6_21 = "male_age_6_to_21"
+  )
+
+WT4.set
+```
+# Converting table to long form
+
+```{r}
+WT4.set.long <-
+  WT4.set %>%
+    pivot_longer(cols = f_3_5:m_6_21, 
+                 names_to = "gender", 
+                 values_to = "total")
+
+WT4.set.long
+```
+
+
+
+# Making gender columns more intuitive
+
+```{r}
+WT4.set.long <- 
+  WT4.set.long %>%
+  mutate(
+    gender = case_when(
+      gender == "f_3_5" ~ "f",
+      gender == "m_3_5" ~ "m",
+      gender == "f_6_21" ~ "f",
+      gender == "m_6_21" ~ "m",
+      TRUE ~ as.character(gender)
+    )
+  )
+
+WT4.set.long
+```
+# Removing NAs
+
+```{r}
+WT4.set.long <-
+  WT4.set.long %>%
+  filter(!is.na(total))
+
+WT4.set.long
+```
+# Creating high count variable
+
+```{r}
+high_count <-
+  WT4.set.long %>%
+  filter(state %in% c("california", "florida", "new york", "pennsylvania", "texas"))
+
+high_count
+```
+```{r}
+high_count %>%
+  filter(gender == "f", age == "Total, Age 6-21") %>%
+  ggplot(aes(x = year, y = total, color = state)) +
+  geom_freqpoly(stat = "identity", size = 1) +
+  labs(title = "Count of Female Students in Special Education Over Time",
+       subtitle = "Ages 6-21")
+```
+# Modeling the data
+
+```{r}
+WT4.set.long %>%
+  filter(age == "Total, Age 6-21") %>%
+  pivot_wider(names_from = gender, 
+              values_from = total) %>%
+  ggplot(aes(x = f, y = m)) +
+  geom_point(size = 3, alpha = .5, color = 'green') +
+  geom_smooth() +
+  labs(
+    title = "Comparison of Female Students to Male Students in Special Education",
+    subtitle = "Counts of students in each state, ages 6-21",
+    x = "Female students",
+    y = "Male students",
+    caption = "Data: US Dept of Education"
+  )
+
+
+```
+# Creating modeling data set for f/m ratio
+
+```{r}
+model_data <- WT4.set.long %>%
+  filter(age == "Total, Age 6-21") %>%
+  mutate(year = as.factor(year(year))) %>%
+  pivot_wider(names_from = gender, 
+              values_from = total) %>% 
+  # Exclude outliers
+  filter(f <= 500000) %>%
+  # Compute male student to female student ratio
+  mutate(ratio = m / f) %>%
+  select(-c(age, disability))
+
+model_data
+```
+# Plotting the jitter plot
+
+```{r}
+ggplot(data = model_data, aes(x = year, y = ratio)) +
+  geom_jitter(alpha = .5, color = 'blue') +
+  labs(title = "Male to Female Ratio Across Years (Jittered)")
+```
+# Modeling ratio year
+
+```{r}
+ratio_year <- 
+  lm(ratio ~ year, data = model_data)
+
+tab_model(ratio_year,
+          title = "Table 1")
+
+```
+# Final Boxplot
+
+```{r}
+model_data %>%
+  pivot_longer(cols = c(f, m), 
+               names_to = "gender", 
+               values_to = "students") %>% 
+  ggplot(aes(x = year, y = students, color = gender)) +
+  geom_boxplot() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Median Male and Female Student Counts in Special Education",
+    subtitle = "Ages 6-21. Does not include outlying areas and freely associated states",
+    x = "",
+    y = "",
+    caption = "Data: US Dept of Education"
+  )
+```
+
